@@ -18,6 +18,7 @@ git:
 jobs:
   include:
     - stage: deploy
+      if: branch = master
       julia: 1
       os: linux
       script:
