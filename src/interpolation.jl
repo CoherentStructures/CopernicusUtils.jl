@@ -177,10 +177,10 @@ where `x` is in c_i, c_j and the interval [x0,xf) is partitioned into intervals
 [x0 = c_0, c_1), [c_1,c_2), ... [c_(nx-1), xf) where all intervals have equal length.
 """
 @inline function getIndex(x::Float64, x0::Float64, xf::Float64, nx::Int, boundary::BoundaryBehaviour)
-    if boundary == periodic #Periodic boundary
+    if boundary == periodic
         xindex, xcoord = gooddivrem((mod(x - x0, (xf-x0))*(nx))/(xf-x0), 1)
         xpp = (xindex+1) % nx
-    elseif boundary == flat || boundary == outofbounds
+    else # boundary == flat || boundary == outofbounds
         xindex, xcoord = gooddivrem(((x-x0)*nx)/(xf-x0), 1)
         xpp = xindex + 1
         if xpp >= nx
@@ -203,20 +203,18 @@ where `x` is in c_i, c_j and the interval [x0,xf) is partitioned into intervals
         if xpp < 0
             xpp = 0
         end
-    else
-        throw(AssertionError("Bad value for boundary"))
     end
     return xindex, xpp, xcoord
 end
 
 function getIndex2(x::Float64, x0::Float64, xf::Float64, nx::Int, boundary::BoundaryBehaviour)
-    if boundary == periodic #Periodic boundary
+    if boundary == periodic
         xindex, xcoord = gooddivrem((mod(x - x0, (xf-x0))*(nx))/(xf-x0), 1)
         xindex = xindex % nx
         xpp = (xindex+1) % nx
         xpp2 = (xindex+2) % nx
         xmm = mod((xindex-1), nx)
-    elseif boundary == flat || boundary == outofbounds # Flat boundary (==1) or Error (==2)
+    else # boundary == flat || boundary == outofbounds
         xindex, xcoord = gooddivrem(((x-x0)*nx)/(xf-x0), 1)
         xpp = xindex + 1
         xpp2 = xindex + 2
@@ -257,8 +255,6 @@ function getIndex2(x::Float64, x0::Float64, xf::Float64, nx::Int, boundary::Boun
         if xpp2 < 0
             xpp2 = 0
         end
-    else
-        throw(AssertionError("Bad value for boundary"))
     end
     return xindex, xpp, xpp2, xmm, xcoord
 end
@@ -348,10 +344,10 @@ Periodic boundary in x and y, constant in t direction.
 function uv_trilinear(u::SVector{2}, p::ItpMetadata, t::Float64)
     Us = p.data[1]
     Vs = p.data[2]
-    return _uv_trilinear(u, Us, Vs, p, t)
+    return @inbounds _uv_trilinear(u, Us, Vs, p, t)
 end
 
-@inbounds function _uv_trilinear(u::SVector{2,T}, Us::U, Vs::U, p::ItpMetadata, t::Float64) where {T<:Real,U}
+function _uv_trilinear(u::SVector{2,T}, Us::U, Vs::U, p::ItpMetadata, t::Float64) where {T<:Real,U}
     #Get data from p
     nx, ny, nt = p.nx, p.ny, p.nt
     ll1, ll2, t0 = p.LL
@@ -527,7 +523,7 @@ Periodic boundary in x and y, constant in t direction.
 function uv_tricubic(u::SVector{2,T}, p::ItpMetadata{S}, t::Float64) where {T<:Real,S}
     Us = p.data[1]
     Vs = p.data[2]
-    return _uv_tricubic(u, Us, Vs, p, t)
+    return @inbounds _uv_tricubic(u, Us, Vs, p, t)
 end
 
 #Actual interpolation version
@@ -536,11 +532,9 @@ function _uv_tricubic(u::SVector{2,T}, Us::U, Vs::U, p::ItpMetadata{S}, t::Float
     ll1, ll2, t0 = p.LL
     ur1, ur2, tf = p.UR
 
-    @inbounds begin
-        xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1], ll1, ur1, nx, p.boundaryX)
-        yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2], ll2, ur2, ny, p.boundaryY)
-        tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf, nt, p.boundaryT)
-    end
+    xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1], ll1, ur1, nx, p.boundaryX)
+    yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2], ll2, ur2, ny, p.boundaryY)
+    tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf, nt, p.boundaryT)
 
     return base_tricubic_interpolation(
         xindex, yindex, tindex,
@@ -562,7 +556,7 @@ Periodic boundary in x and y, constant in t direction.
 """
 function ssh_tricubic(u::StaticVector{2,T}, p, t::Float64) where {T<:Real}
     sshs = p[7]
-    return _ssh_tricubic(u, sshs, p, t)
+    return @inbounds _ssh_tricubic(u, sshs, p, t)
 end
 
 
@@ -571,11 +565,9 @@ function _ssh_tricubic(u::StaticVector{2,T}, sshs::S, p, t::Float64) where {T<:R
     ll1, ll2, t0 = p.LL
     ur1, ur2, tf = p.UR
 
-    @inbounds begin
-        xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1], ll1, ur1, nx, p.boundaryX)
-        yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2], ll2, ur2, ny, p.boundaryY)
-        tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf, nt, p.boundaryT)
-    end
+    xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1], ll1, ur1, nx, p.boundaryX)
+    yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2], ll2, ur2, ny, p.boundaryY)
+    tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf, nt, p.boundaryT)
 
     return base_tricubic_interpolation(
         xindex, yindex, tindex,
@@ -589,7 +581,7 @@ end
 
 function ssh_tricubic_gradient(u::StaticVector{2,T}, p::ItpMetadata{S}, t::Float64) where {T<:Real,S}
     sshs = p.data
-    return _ssh_tricubic_gradient(u, sshs, p, t)
+    return @inbounds _ssh_tricubic_gradient(u, sshs, p, t)
 end
 
 
@@ -598,11 +590,9 @@ function _ssh_tricubic_gradient(u::StaticVector{2,T}, sshs::U, p::ItpMetadata{S}
     ll1, ll2, t0 = p.LL
     ur1, ur2, tf = p.UR
 
-    @inbounds begin
-        xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1],ll1,ur1, nx, p.boundaryX)
-        yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2],ll2,ur2, ny, p.boundaryY)
-        tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf, nt, p.boundaryT)
-    end
+    xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1],ll1,ur1, nx, p.boundaryX)
+    yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2],ll2,ur2, ny, p.boundaryY)
+    tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf, nt, p.boundaryT)
 
     res1 = base_tricubic_interpolation_gradient(xindex, yindex, tindex,
                                                 xpp, ypp, tpp,
@@ -620,21 +610,18 @@ end
 function uv_tricubic_eqvari(u::StaticMatrix{2,3,T}, p::ItpMetadata{S}, t::Float64) where {T<:Real,S}
     Us = p.data[1]
     Vs = p.data[2]
-    return _uv_tricubic_eqvari(u, Us, Vs, p, t)
+    return @inbounds _uv_tricubic_eqvari(u, Us, Vs, p, t)
 end
 
-
-function _uv_tricubic_eqvari(uIn::StaticMatrix{2,3,T}, Us::U, Vs::U, p::ItpMetadata{S}, t::Float64) where {T<:Real,S,U}
+function _uv_tricubic_eqvari(uIn::StaticMatrix{2,3}, Us::U, Vs::U, p::ItpMetadata{S}, t::Float64) where {S,U}
     u = SVector{2}((uIn[1,1], uIn[2,1]))
     nx, ny, nt = p.nx, p.ny, p.nt
     ll1, ll2, t0 = p.LL
     ur1, ur2, tf = p.UR
 
-    @inbounds begin
-        xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1], ll1, ur1, nx, p.boundaryX)
-        yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2], ll2, ur2, ny, p.boundaryY)
-        tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf, nt, p.boundaryT)
-    end
+    xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1], ll1, ur1, nx, p.boundaryX)
+    yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2], ll2, ur2, ny, p.boundaryY)
+    tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf, nt, p.boundaryT)
 
     Uitp = base_tricubic_interpolation_gradient(
         xindex, yindex, tindex,
@@ -798,7 +785,7 @@ function uv_quadlinear(u::SVector{3,T}, p::ItpMetadata3{S}, t::Float64) where {T
     Us = p.data[1]
     Vs = p.data[2]
     Ws = p.data[3]
-    return _uv_quadlinear(u, Us, Vs, Ws, p, t)
+    return @inbounds _uv_quadlinear(u, Us, Vs, Ws, p, t)
 end
 
 function _uv_quadlinear(u::SVector{3,T}, Us::U, Vs::U, Ws::U, p::ItpMetadata3{S}, t::Float64) where {T<:Real,S,U}
@@ -807,26 +794,24 @@ function _uv_quadlinear(u::SVector{3,T}, Us::U, Vs::U, Ws::U, p::ItpMetadata3{S}
     ll1, ll2, ll3, t0 = p.LL
     ur1, ur2, ur3, tf = p.UR
 
-    @inbounds begin
-        xindex, xpp, xcoord = getIndex(u[1], ll1, ur1, nx, p.boundaryX)
-        yindex, ypp, ycoord = getIndex(u[2], ll2, ur2, ny, p.boundaryY)
-        zindex, zpp, zcoord = getIndex(u[3], ll3, ur3, nz, p.boundaryZ)
-        tindex, tpp, tcoord = getIndex(t, t0, tf, nt, p.boundaryT)
+    xindex, xpp, xcoord = getIndex(u[1], ll1, ur1, nx, p.boundaryX)
+    yindex, ypp, ycoord = getIndex(u[2], ll2, ur2, ny, p.boundaryY)
+    zindex, zpp, zcoord = getIndex(u[3], ll3, ur3, nz, p.boundaryZ)
+    tindex, tpp, tcoord = getIndex(t, t0, tf, nt, p.boundaryT)
 
-        function singleTriLinear(what, zindex)
-            r1u = what[xindex+1, yindex + 1, zindex + 1, tindex + 1]*(1 - xcoord) +
-                            what[xpp + 1, yindex + 1, zindex + 1, tindex + 1]*xcoord
-            r2u = what[xindex+1, ypp + 1, zindex + 1, tindex + 1]*(1 - xcoord) +
-                            what[xpp + 1, ypp + 1, zindex + 1, tindex + 1]*xcoord
-            r3u = what[xindex + 1, yindex + 1, zindex + 1, tpp + 1]*(1 - xcoord) +
-                            what[xpp + 1, yindex + 1, zindex + 1, tpp + 1]*xcoord
-            r4u = what[xindex+1, ypp + 1, zindex + 1, tpp + 1]*(1 - xcoord) +
-                            what[xpp + 1, ypp + 1, zindex + 1, tpp + 1]*xcoord
-            return ((1-tcoord)*((1-ycoord)*r1u + ycoord*r2u) + tcoord*((1-ycoord)*r3u + ycoord*r4u))
-        end
-        function singleQuadLinear(what)
-            return (1-zcoord)*singleTriLinear(what, zindex) + zcoord*singleTriLinear(what, zpp)
-        end
+    function singleTriLinear(what, zindex)
+        r1u = what[xindex+1, yindex + 1, zindex + 1, tindex + 1]*(1 - xcoord) +
+                        what[xpp + 1, yindex + 1, zindex + 1, tindex + 1]*xcoord
+        r2u = what[xindex+1, ypp + 1, zindex + 1, tindex + 1]*(1 - xcoord) +
+                        what[xpp + 1, ypp + 1, zindex + 1, tindex + 1]*xcoord
+        r3u = what[xindex + 1, yindex + 1, zindex + 1, tpp + 1]*(1 - xcoord) +
+                        what[xpp + 1, yindex + 1, zindex + 1, tpp + 1]*xcoord
+        r4u = what[xindex+1, ypp + 1, zindex + 1, tpp + 1]*(1 - xcoord) +
+                        what[xpp + 1, ypp + 1, zindex + 1, tpp + 1]*xcoord
+        return ((1-tcoord)*((1-ycoord)*r1u + ycoord*r2u) + tcoord*((1-ycoord)*r3u + ycoord*r4u))
+    end
+    function singleQuadLinear(what)
+        return (1-zcoord)*singleTriLinear(what, zindex) + zcoord*singleTriLinear(what, zpp)
     end
     return SVector{3,T}((singleQuadLinear(Us), singleQuadLinear(Vs), singleQuadLinear(Ws)))
 end
