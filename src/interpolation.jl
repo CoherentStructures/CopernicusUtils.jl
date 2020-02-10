@@ -3,8 +3,6 @@
 include("coeff.jl")
 
 @enum BoundaryBehaviour periodic=0 flat=1 outofbounds=2
-BoundaryBehaviour(bb::BoundaryBehaviour) = bb
-const BBorInt = Union{BoundaryBehaviour, Int}
 
 function sparse_by_svec(A::SparseMatrixCSC{TA}, x::Symbol) where {TA}
     n, m = size(A)
@@ -280,22 +278,25 @@ end
 
 function ItpMetadata(nx::Int, ny::Int, nt::Int,
                     LL::AbstractVector{Float64}, UR::AbstractVector{Float64}, data::T,
-                    boundaryX::BBorInt, boundaryY::BBorInt, boundaryT::BBorInt) where {T}
+                    boundaryX::BoundaryBehaviour, boundaryY::BoundaryBehaviour, boundaryT::BoundaryBehaviour) where {T}
     @assert length(LL) == 3
     @assert length(UR) == 3
     return ItpMetadata(nx, ny, nt,
                         SVector{3}((LL[1], LL[2], LL[3])), SVector{3}((UR[1], UR[2], UR[3])),
-                        data, BoundaryBehaviour(boundaryX), BoundaryBehaviour(boundaryY), BoundaryBehaviour(boundaryT))
+                        data, boundaryX, boundaryY, boundaryT)
 end
+@deprecate ItpMetadata(nx::Int, ny::Int, nt::Int,
+                    LL::AbstractVector{Float64}, UR::AbstractVector{Float64}, data::T,
+                    boundaryX::Int, boundaryY::Int, boundaryT::Int
+                    ) where {T} ItpMetadata(nx, ny, nt, LL, UR, data, BoundaryBehaviour(boundaryX), BoundaryBehaviour(boundaryY), BoundaryBehaviour(boundaryT))
 function ItpMetadata(xspan::AbstractRange, yspan::AbstractRange, tspan::AbstractRange, data::T,
-                        boundaryX::BBorInt, boundaryY::BBorInt, boundaryT::BBorInt) where {T}
+        boundaryX::BoundaryBehaviour, boundaryY::BoundaryBehaviour, boundaryT::BoundaryBehaviour) where {T}
     nx = length(xspan)
     ny = length(yspan)
     nt = length(tspan)
     LL = SVector{3}((minimum(xspan), minimum(yspan), minimum(tspan)))
     UR = SVector{3}((maximum(xspan)+step(xspan), maximum(yspan)+step(yspan), maximum(tspan)+step(tspan)))
-    return ItpMetadata(nx, ny, nt, LL, UR, data,
-        BoundaryBehaviour(boundaryX), BoundaryBehaviour(boundaryY), BoundaryBehaviour(boundaryT))
+    return ItpMetadata(nx, ny, nt, LL, UR, data, boundaryX, boundaryY, boundaryT)
 end
 
 struct ItpMetadata3{T}
@@ -313,27 +314,28 @@ struct ItpMetadata3{T}
 end
 
 function ItpMetadata3(nx::Int, ny::Int, nz::Int, nt::Int,
-                    LL::AbstractVector{Float64}, UR::AbstractVector{Float64}, data::T,
-                    boundaryX::BBorInt, boundaryY::BBorInt, boundaryZ::BBorInt, boundaryT::BBorInt) where {T}
+        LL::AbstractVector{Float64}, UR::AbstractVector{Float64}, data::T,
+        boundaryX::BoundaryBehaviour, boundaryY::BoundaryBehaviour, boundaryZ::BoundaryBehaviour, boundaryT::BoundaryBehaviour) where {T}
     @assert length(LL) == 4
     @assert length(UR) == 4
     ItpMetadata3(nx, ny, nz, nt, SVector{4}((LL[1], LL[2], LL[3], LL[4])),
                     SVector{4}((UR[1], UR[2], UR[3], UR[4])), data,
-                    BoundaryBehaviour(boundaryX),
-                    BoundaryBehaviour(boundaryY),
-                    BoundaryBehaviour(boundaryZ),
-                    BoundaryBehaviour(boundaryT))
+                    boundaryX, boundaryY, boundaryZ, boundaryT)
 end
+@deprecate ItpMetadata3(nx::Int, ny::Int, nz::Int, nt::Int,
+        LL::AbstractVector{Float64}, UR::AbstractVector{Float64}, data::T,
+        boundaryX::Int, boundaryY::Int, boundaryZ::Int, boundaryT::Int
+        ) where {T} ItpMetadata3(nx, ny, nz, nt, LL, UR, data,
+                BoundaryBehaviour(boundaryX), BoundaryBehaviour(boundaryY), BoundaryBehaviour(boundaryZ), BoundaryBehaviour(boundaryT))
 function ItpMetadata3(xspan::AbstractRange, yspan::AbstractRange, zspan::AbstractRange, tspan::AbstractRange,
-            data::T, boundaryX::BBorInt, boundaryY::BBorInt, bounradyZ::BBorInt, boundaryT::BBorInt) where {T}
+        data::T, boundaryX::BoundaryBehaviour, boundaryY::BoundaryBehaviour, bounradyZ::BoundaryBehaviour, boundaryT::BoundaryBehaviour) where {T}
     nx = length(xspan)
     ny = length(yspan)
     nz = length(zspan)
     nt = length(tspan)
     LL = SVector{4}((minimum(xspan), minimum(yspan), minimum(zspan), minimum(tspan)))
     UR = SVector{4}((maximum(xspan)+step(xspan), maximum(yspan)+step(yspan), maximum(zspan)+step(zspan), maximum(tspan)+step(tspan)))
-    return ItpMetadata3(nx, ny, nznt, LL, UR, data,
-        BoundaryBehaviour(boundaryX), BoundaryBehaviour(boundaryY), BoundaryBehaviour(boundaryZ), BoundaryBehaviour(boundaryT))
+    return ItpMetadata3(nx, ny, nznt, LL, UR, data, boundaryX, boundaryY, boundaryZ, boundaryT)
 end
 
 """
@@ -386,7 +388,7 @@ function base_tricubic_interpolation(
     yp = SVector{4,T}((1.0, y, y^2, y^3))
     tp = SVector{4,T}((1.0, t, t^2, t^3))
 
-    function earthIndexRaw(i, j, k)
+    function toRawIndex(i, j, k)
         if i == -1
             xi = xmm
         elseif i == 0
@@ -426,9 +428,9 @@ function base_tricubic_interpolation(
     end
 
     @inbounds begin
-        uvals = @SArray T[Us[earthIndexRaw(i,j,k)] for i in -1:2, j in -1:2, k in -1:2]
+        uvals = @SArray T[Us[toRawIndex(i,j,k)] for i in -1:2, j in -1:2, k in -1:2]
         AFbyu = A_times_svec(F_times_svec(uvals))
-        vvals = @SArray T[Vs[earthIndexRaw(i,j,k)] for i in -1:2, j in -1:2, k in -1:2]
+        vvals = @SArray T[Vs[toRawIndex(i,j,k)] for i in -1:2, j in -1:2, k in -1:2]
         AFbyv = A_times_svec(F_times_svec(vvals))
 
         res1 = zero(T)
@@ -458,7 +460,7 @@ function base_tricubic_interpolation_gradient(
     result2 = zero(T)
     result3 = zero(T)
 
-    function earthIndexRaw(i, j, k)
+    function toRawIndex(i, j, k)
         if i == -1
             xi = xmm
         elseif i == 0
@@ -498,7 +500,7 @@ function base_tricubic_interpolation_gradient(
     end
 
     @inbounds begin
-        uvals = @SArray T[Us[earthIndexRaw(i,j,k)] for i in -1:2, j in -1:2, k in -1:2]
+        uvals = @SArray T[Us[toRawIndex(i,j,k)] for i in -1:2, j in -1:2, k in -1:2]
         AFbyu = A_times_svec(F_times_svec(uvals))
         for i in 1:4, j in 1:4, k in 1:4
             curx = xp[i]
