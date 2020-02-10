@@ -211,7 +211,7 @@ where `x` is in c_i, c_j and the interval [x0,xf) is partitioned into intervals
     return xindex, xpp, xcoord
 end
 
-@inline function getIndex2(x::Float64, x0::Float64, xf::Float64, nx::Int, boundary::BoundaryBehaviour)
+function getIndex2(x::Float64, x0::Float64, xf::Float64, nx::Int, boundary::BoundaryBehaviour)
     if boundary == periodic #Periodic boundary
         xindex, xcoord = gooddivrem((mod(x - x0, (xf-x0))*(nx))/(xf-x0), 1)
         xindex = xindex % nx
